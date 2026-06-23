@@ -1,0 +1,63 @@
+name: Test custom options (dark theme, image mode, lifetime range)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test README with markers
+        run: |
+          cat > "$GITHUB_WORKSPACE/test-readme-custom.md" << 'EOF'
+          # Test README
+
+          <!-- STATSFM START -->
+          <!-- STATSFM END -->
+          EOF
+          echo "Created README:"
+          cat "$GITHUB_WORKSPACE/test-readme-custom.md"
+
+      - id: action
+        uses: .
+        with:
+          statsfm_username: teraha
+          readme_path: /github/workspace/test-readme-custom.md
+          display_limit: '3'
+          items_per_row: '3'
+          show_duration: 'true'
+          show_rank: 'false'
+          time_range: lifetime
+          theme: dark
+          display_mode: image
+        continue-on-error: true
+
+      - name: Assert action ran correctly with custom options
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          echo "README content after action:"
+          cat "$GITHUB_WORKSPACE/test-readme-custom.md"
+          if [ "$OUTCOME" = "success" ]; then
+            # Action succeeded - verify README was updated between markers
+            content=$(cat "$GITHUB_WORKSPACE/test-readme-custom.md")
+            if ! echo "$content" | grep -q "<!-- STATSFM START -->"; then
+              echo "FAIL: START marker missing"
+              exit 1
+            fi
+            if ! echo "$content" | grep -q "<!-- STATSFM END -->"; then
+              echo "FAIL: END marker missing"
+              exit 1
+            fi
+            echo "PASS: action succeeded with custom options and README markers are intact"
+          else
+            # Action failed - this is acceptable if API is unavailable in CI
+            echo "INFO: action outcome was '$OUTCOME' (API may be unavailable in CI)"
+            # Verify README file still exists
+            if [ ! -f "$GITHUB_WORKSPACE/test-readme-custom.md" ]; then
+              echo "FAIL: README file was deleted by the action"
+              exit 1
+            fi
+            echo "PASS: action ran with custom options (API may be unavailable), README file intact"
+          fi

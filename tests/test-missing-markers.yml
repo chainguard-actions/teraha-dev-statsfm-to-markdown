@@ -1,0 +1,53 @@
+name: Test missing README markers
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test README without markers
+        run: |
+          cat > "$GITHUB_WORKSPACE/test-readme-no-markers.md" << 'EOF'
+          # Test README
+
+          This README has no statsfm markers.
+          EOF
+          echo "Created README without markers:"
+          cat "$GITHUB_WORKSPACE/test-readme-no-markers.md"
+          # Record original content
+          cp "$GITHUB_WORKSPACE/test-readme-no-markers.md" "$GITHUB_WORKSPACE/test-readme-no-markers-original.md"
+
+      - id: action
+        uses: .
+        with:
+          statsfm_username: teraha
+          readme_path: /github/workspace/test-readme-no-markers.md
+          display_mode: image
+        continue-on-error: true
+
+      - name: Assert README was not modified (no markers to update)
+        if: always()
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          echo "README content after action:"
+          cat "$GITHUB_WORKSPACE/test-readme-no-markers.md"
+          original=$(cat "$GITHUB_WORKSPACE/test-readme-no-markers-original.md")
+          current=$(cat "$GITHUB_WORKSPACE/test-readme-no-markers.md")
+          if [ "$original" != "$current" ]; then
+            echo "FAIL: README was modified even though it has no STATSFM markers"
+            echo "Original:"
+            echo "$original"
+            echo "Current:"
+            echo "$current"
+            exit 1
+          fi
+          echo "PASS: README was not modified (action correctly did not update a README without markers)"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "WARN: action reported success but README has no markers - this is unexpected"
+          else
+            echo "INFO: action outcome was '$OUTCOME' as expected (no markers found or API error)"
+          fi

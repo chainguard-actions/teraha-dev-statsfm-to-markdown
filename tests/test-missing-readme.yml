@@ -1,0 +1,38 @@
+name: Test missing README file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure README does not exist
+        run: |
+          rm -f "$GITHUB_WORKSPACE/nonexistent-readme-file.md"
+          echo "Confirmed: nonexistent-readme-file.md does not exist"
+
+      - id: action
+        uses: .
+        with:
+          statsfm_username: teraha
+          readme_path: /github/workspace/nonexistent-readme-file.md
+          display_mode: image
+        continue-on-error: true
+
+      - name: Assert action failed and README was not created
+        if: always()
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ -f "$GITHUB_WORKSPACE/nonexistent-readme-file.md" ]; then
+            echo "FAIL: README file was unexpectedly created by the action"
+            exit 1
+          fi
+          echo "PASS: README file was not created (action correctly did not create a missing file)"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "WARN: action reported success but README file does not exist - this is unexpected"
+          else
+            echo "INFO: action outcome was '$OUTCOME' as expected (file not found or API error)"
+          fi
