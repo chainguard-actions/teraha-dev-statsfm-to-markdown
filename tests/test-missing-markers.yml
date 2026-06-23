@@ -1,0 +1,37 @@
+name: Test missing README markers error handling
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create README without STATSFM markers
+        run: |
+          cat > /tmp/test-readme-no-markers.md << 'EOF'
+          # Test Profile
+
+          This README has no statsfm markers.
+          EOF
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          statsfm_username: teraha
+          readme_path: '/tmp/test-readme-no-markers.md'
+          time_range: 'lifetime'
+          theme: 'dark'
+
+      - name: Assert action failed due to missing markers or API error
+        run: |
+          echo "Action outcome: ${{ steps.action.outcome }}"
+          # The action should fail: either because the API returned data but markers
+          # are missing, or because the API itself is unavailable in the test env.
+          # In both cases, the action must not succeed.
+          if [ "${{ steps.action.outcome }}" = "success" ]; then
+            echo "FAIL: action should not succeed when README has no STATSFM markers"
+            exit 1
+          fi
+          echo "PASS: action correctly did not succeed (outcome=${{ steps.action.outcome }})"
