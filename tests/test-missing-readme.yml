@@ -1,0 +1,28 @@
+name: Test missing README file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run action with non-existent README path
+        id: action
+        uses: .
+        with:
+          statsfm_username: teraha
+          readme_path: /github/workspace/nonexistent-readme-file.md
+          display_mode: 'image'
+        continue-on-error: true
+
+      - name: Assert action did not succeed
+        env:
+          ACTION_OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "Action outcome: $ACTION_OUTCOME"
+          if [ "$ACTION_OUTCOME" = "success" ]; then
+            echo "FAIL: Expected action to fail (missing README), but it succeeded"
+            exit 1
+          fi
+          echo "PASS: Action did not succeed (failed due to missing README or API unavailable)"

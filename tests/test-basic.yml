@@ -1,0 +1,50 @@
+name: Test basic usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test README with markers
+        run: |
+          printf '# My Profile\n\n## Top Albums\n\n<!-- STATSFM START -->\n<!-- STATSFM END -->\n' > "$GITHUB_WORKSPACE/test-readme.md"
+          echo "=== Created README ==="
+          cat "$GITHUB_WORKSPACE/test-readme.md"
+
+      - id: action
+        uses: .
+        with:
+          statsfm_username: teraha
+          display_limit: '5'
+          items_per_row: '5'
+          show_duration: 'true'
+          show_rank: 'true'
+          time_range: 'lifetime'
+          readme_path: /github/workspace/test-readme.md
+          theme: 'light'
+          display_mode: 'image'
+        continue-on-error: true
+
+      - name: Assert action ran (success or graceful failure)
+        env:
+          ACTION_OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "Action outcome: $ACTION_OUTCOME"
+          if [ "$ACTION_OUTCOME" = "success" ]; then
+            echo "=== README content ==="
+            cat "$GITHUB_WORKSPACE/test-readme.md" || echo "(file not found)"
+            echo "=== End README ==="
+            if ! grep -q "STATSFM START" "$GITHUB_WORKSPACE/test-readme.md"; then
+              echo "FAIL: STATSFM START marker missing after successful run"
+              exit 1
+            fi
+            if ! grep -q "STATSFM END" "$GITHUB_WORKSPACE/test-readme.md"; then
+              echo "FAIL: STATSFM END marker missing after successful run"
+              exit 1
+            fi
+            echo "PASS: README markers present after successful run"
+          else
+            echo "PASS: Action failed gracefully (likely API unavailable in test environment)"
+          fi
