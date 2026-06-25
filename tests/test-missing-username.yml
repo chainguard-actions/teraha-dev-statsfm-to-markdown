@@ -1,0 +1,37 @@
+name: Test missing username fails
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test README with markers in workspace
+        run: |
+          cat > "$GITHUB_WORKSPACE/test-readme-missing.md" << 'EOF'
+          # My Profile
+
+          <!-- STATSFM START -->
+          <!-- STATSFM END -->
+          EOF
+          echo "Created README at: $GITHUB_WORKSPACE/test-readme-missing.md"
+          cat "$GITHUB_WORKSPACE/test-readme-missing.md"
+
+      - name: Run action without username (expect failure)
+        id: action
+        uses: .
+        continue-on-error: true
+        with:
+          statsfm_username: ''
+          readme_path: /github/workspace/test-readme-missing.md
+
+      - name: Assert action failed due to missing username
+        run: |
+          OUTCOME="${{ steps.action.outcome }}"
+          echo "Action outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: Expected action to fail when username is empty, but got: $OUTCOME"
+            exit 1
+          fi
+          echo "PASS: Action correctly failed when username was not provided"
