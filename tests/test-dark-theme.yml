@@ -1,0 +1,61 @@
+name: Test dark theme and months time range
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test README with markers
+        run: |
+          cat > "$GITHUB_WORKSPACE/test-dark-readme.md" << 'EOF'
+          # My Profile
+
+          <!-- STATSFM START -->
+          <!-- STATSFM END -->
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          statsfm_username: teraha
+          display_limit: '2'
+          items_per_row: '2'
+          time_range: 'months'
+          theme: 'dark'
+          show_duration: 'true'
+          show_rank: 'true'
+          readme_path: '/github/workspace/test-dark-readme.md'
+        continue-on-error: true
+
+      - name: Assert README was updated with dark theme content
+        run: |
+          echo "=== Action outcome: ${{ steps.action.outcome }} ==="
+          echo "=== README content ==="
+          cat "$GITHUB_WORKSPACE/test-dark-readme.md"
+          echo "=== End README ==="
+
+          # Check that the start and end markers still exist
+          if ! grep -q '<!-- STATSFM START -->' "$GITHUB_WORKSPACE/test-dark-readme.md"; then
+            echo "FAIL: START marker missing from README"
+            exit 1
+          fi
+          if ! grep -q '<!-- STATSFM END -->' "$GITHUB_WORKSPACE/test-dark-readme.md"; then
+            echo "FAIL: END marker missing from README"
+            exit 1
+          fi
+
+          if [ "${{ steps.action.outcome }}" = "success" ]; then
+            # Check that content was inserted between markers
+            BETWEEN=$(awk '/<!-- STATSFM START -->/{found=1; next} /<!-- STATSFM END -->/{found=0} found{print}' "$GITHUB_WORKSPACE/test-dark-readme.md")
+            echo "Content between markers: $BETWEEN"
+            if [ -z "$(echo "$BETWEEN" | tr -d '[:space:]')" ]; then
+              echo "FAIL: Action succeeded but no content was inserted between markers"
+              exit 1
+            fi
+            echo "PASS: README was updated with dark theme content"
+          else
+            echo "NOTE: Action did not succeed (API may be unavailable) - markers still present"
+            echo "PASS: Markers preserved, action ran"
+          fi

@@ -9,34 +9,52 @@ jobs:
 
       - name: Create test README with markers
         run: |
-          cat > /tmp/test-readme.md << 'EOF'
-          # Test Profile
+          cat > "$GITHUB_WORKSPACE/test-readme.md" << 'EOF'
+          # My Profile
 
           <!-- STATSFM START -->
           <!-- STATSFM END -->
+
+          ## Other content
           EOF
 
       - id: action
         uses: .
-        continue-on-error: true
         with:
           statsfm_username: teraha
-          display_limit: '5'
-          items_per_row: '5'
-          show_duration: 'true'
-          show_rank: 'true'
-          time_range: 'weeks'
-          readme_path: '/tmp/test-readme.md'
-          theme: 'light'
+          display_limit: '3'
+          items_per_row: '3'
+          time_range: 'lifetime'
+          readme_path: '/github/workspace/test-readme.md'
+        continue-on-error: true
 
-      - name: Assert action ran (API may fail in test env, but action should start)
+      - name: Assert README markers are preserved
         run: |
-          # The action either succeeded (updated README) or failed due to API unavailability.
-          # Either way, the Docker container must have started and run the Python script.
-          # We verify the action step completed (not a Docker build failure).
-          echo "Action outcome: ${{ steps.action.outcome }}"
-          if [ "${{ steps.action.outcome }}" = "skipped" ]; then
-            echo "FAIL: action was skipped unexpectedly"
+          echo "=== Action outcome: ${{ steps.action.outcome }} ==="
+          echo "=== README content ==="
+          cat "$GITHUB_WORKSPACE/test-readme.md"
+          echo "=== End README ==="
+
+          # Check that the start and end markers still exist
+          if ! grep -q '<!-- STATSFM START -->' "$GITHUB_WORKSPACE/test-readme.md"; then
+            echo "FAIL: START marker missing from README"
             exit 1
           fi
-          echo "PASS: action ran (outcome=${{ steps.action.outcome }})"
+          if ! grep -q '<!-- STATSFM END -->' "$GITHUB_WORKSPACE/test-readme.md"; then
+            echo "FAIL: END marker missing from README"
+            exit 1
+          fi
+
+          if [ "${{ steps.action.outcome }}" = "success" ]; then
+            # Check that content was inserted between markers
+            BETWEEN=$(awk '/<!-- STATSFM START -->/{found=1; next} /<!-- STATSFM END -->/{found=0} found{print}' "$GITHUB_WORKSPACE/test-readme.md")
+            echo "Content between markers: $BETWEEN"
+            if [ -z "$(echo "$BETWEEN" | tr -d '[:space:]')" ]; then
+              echo "FAIL: Action succeeded but no content was inserted between markers"
+              exit 1
+            fi
+            echo "PASS: README was updated with content between markers"
+          else
+            echo "NOTE: Action did not succeed (API may be unavailable) - markers still present"
+            echo "PASS: Markers preserved, action ran"
+          fi
