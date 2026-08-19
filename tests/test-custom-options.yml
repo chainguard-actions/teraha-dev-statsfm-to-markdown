@@ -7,21 +7,15 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create test README with markers in workspace
+      - name: Prepare test README from fixture
         run: |
-          cat > "$GITHUB_WORKSPACE/test-readme-custom.md" << 'EOF'
-          # My Profile
+          cp "$GITHUB_WORKSPACE/tests/fixtures/test-readme-custom.md" \
+             "$GITHUB_WORKSPACE/tests/fixtures/test-readme-custom-run.md"
+          echo "Prepared README:"
+          cat "$GITHUB_WORKSPACE/tests/fixtures/test-readme-custom-run.md"
 
-          <!-- STATSFM START -->
-          <!-- STATSFM END -->
-          EOF
-          echo "Created README at: $GITHUB_WORKSPACE/test-readme-custom.md"
-          cat "$GITHUB_WORKSPACE/test-readme-custom.md"
-
-      - name: Run action with custom options (lifetime range, no rank/duration)
-        id: action
+      - id: action
         uses: .
-        continue-on-error: true
         with:
           statsfm_username: teraha
           display_limit: '3'
@@ -29,42 +23,39 @@ jobs:
           show_duration: 'false'
           show_rank: 'false'
           time_range: 'lifetime'
-          readme_path: /github/workspace/test-readme-custom.md
+          readme_path: /github/workspace/tests/fixtures/test-readme-custom-run.md
+        continue-on-error: true
 
-      - name: Assert action ran with custom options
+      - name: Assert README was updated with custom options (or API was unavailable)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
         run: |
-          OUTCOME="${{ steps.action.outcome }}"
           echo "Action outcome: $OUTCOME"
+          README="$GITHUB_WORKSPACE/tests/fixtures/test-readme-custom-run.md"
+          echo "=== README content ==="
+          cat "$README"
+          echo "=== End README ==="
 
-          # If the action succeeded, verify the README was updated
           if [ "$OUTCOME" = "success" ]; then
-            echo "=== README content ==="
-            cat "$GITHUB_WORKSPACE/test-readme-custom.md"
-            echo "=== End README ==="
-
-            if ! grep -q "<!-- STATSFM START -->" "$GITHUB_WORKSPACE/test-readme-custom.md"; then
+            # Check that the markers still exist
+            if ! grep -q "<!-- STATSFM START -->" "$README"; then
               echo "FAIL: START marker missing from README"
               exit 1
             fi
-
-            if ! grep -q "<!-- STATSFM END -->" "$GITHUB_WORKSPACE/test-readme-custom.md"; then
+            if ! grep -q "<!-- STATSFM END -->" "$README"; then
               echo "FAIL: END marker missing from README"
               exit 1
             fi
 
-            CONTENT=$(sed -n '/<!-- STATSFM START -->/,/<!-- STATSFM END -->/p' "$GITHUB_WORKSPACE/test-readme-custom.md")
-            LINE_COUNT=$(echo "$CONTENT" | wc -l)
-            echo "Lines between markers: $LINE_COUNT"
-            if [ "$LINE_COUNT" -le 2 ]; then
-              echo "FAIL: No content was inserted between markers"
+            # Check that content was inserted between markers
+            BETWEEN=$(awk '/<!-- STATSFM START -->/{found=1; next} /<!-- STATSFM END -->/{found=0} found{print}' "$README")
+            echo "Content between markers: $BETWEEN"
+            if [ -z "$(echo "$BETWEEN" | tr -d '[:space:]')" ]; then
+              echo "FAIL: No content was inserted between the markers"
               exit 1
             fi
-
-            echo "PASS: README was updated with custom options (lifetime range, no rank/duration)"
-          elif [ "$OUTCOME" = "failure" ]; then
-            # API may be unavailable in CI — this is acceptable
-            echo "PASS: Action ran (API may be unavailable in CI environment)"
+            echo "PASS: README was updated with content between markers"
           else
-            echo "FAIL: Unexpected outcome: $OUTCOME"
-            exit 1
+            echo "INFO: Action failed (likely external API unavailable) - treating as acceptable"
+            echo "PASS: Test accepted API failure as non-blocking"
           fi

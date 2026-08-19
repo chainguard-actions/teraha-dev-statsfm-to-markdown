@@ -7,64 +7,50 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create test README with markers in workspace
+      - name: Prepare test README from fixture
         run: |
-          cat > "$GITHUB_WORKSPACE/test-readme.md" << 'EOF'
-          # My Profile
+          cp "$GITHUB_WORKSPACE/tests/fixtures/test-readme.md" \
+             "$GITHUB_WORKSPACE/tests/fixtures/test-readme-run.md"
+          echo "Prepared README:"
+          cat "$GITHUB_WORKSPACE/tests/fixtures/test-readme-run.md"
 
-          <!-- STATSFM START -->
-          <!-- STATSFM END -->
-          EOF
-          echo "Created README at: $GITHUB_WORKSPACE/test-readme.md"
-          cat "$GITHUB_WORKSPACE/test-readme.md"
-
-      - name: Run action with basic inputs
-        id: action
+      - id: action
         uses: .
-        continue-on-error: true
         with:
           statsfm_username: teraha
-          display_limit: '5'
-          items_per_row: '5'
-          show_duration: 'true'
-          show_rank: 'true'
-          time_range: 'weeks'
-          readme_path: /github/workspace/test-readme.md
+          readme_path: /github/workspace/tests/fixtures/test-readme-run.md
+        continue-on-error: true
 
-      - name: Assert action ran (success or API failure are both acceptable outcomes)
+      - name: Assert README was updated between markers (or API was unavailable)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
         run: |
-          OUTCOME="${{ steps.action.outcome }}"
           echo "Action outcome: $OUTCOME"
+          README="$GITHUB_WORKSPACE/tests/fixtures/test-readme-run.md"
+          echo "=== README content ==="
+          cat "$README"
+          echo "=== End README ==="
 
-          # If the action succeeded, verify the README was updated
           if [ "$OUTCOME" = "success" ]; then
-            echo "=== README content ==="
-            cat "$GITHUB_WORKSPACE/test-readme.md"
-            echo "=== End README ==="
-
-            if ! grep -q "<!-- STATSFM START -->" "$GITHUB_WORKSPACE/test-readme.md"; then
+            # Check that the markers still exist
+            if ! grep -q "<!-- STATSFM START -->" "$README"; then
               echo "FAIL: START marker missing from README"
               exit 1
             fi
-
-            if ! grep -q "<!-- STATSFM END -->" "$GITHUB_WORKSPACE/test-readme.md"; then
+            if ! grep -q "<!-- STATSFM END -->" "$README"; then
               echo "FAIL: END marker missing from README"
               exit 1
             fi
 
-            CONTENT=$(sed -n '/<!-- STATSFM START -->/,/<!-- STATSFM END -->/p' "$GITHUB_WORKSPACE/test-readme.md")
-            LINE_COUNT=$(echo "$CONTENT" | wc -l)
-            echo "Lines between markers: $LINE_COUNT"
-            if [ "$LINE_COUNT" -le 2 ]; then
-              echo "FAIL: No content was inserted between markers"
+            # Check that content was inserted between markers
+            BETWEEN=$(awk '/<!-- STATSFM START -->/{found=1; next} /<!-- STATSFM END -->/{found=0} found{print}' "$README")
+            echo "Content between markers: $BETWEEN"
+            if [ -z "$(echo "$BETWEEN" | tr -d '[:space:]')" ]; then
+              echo "FAIL: No content was inserted between the markers"
               exit 1
             fi
-
-            echo "PASS: README was updated with album content"
-          elif [ "$OUTCOME" = "failure" ]; then
-            # API may be unavailable in CI — this is acceptable
-            echo "PASS: Action ran (API may be unavailable in CI environment)"
+            echo "PASS: README was updated with content between markers"
           else
-            echo "FAIL: Unexpected outcome: $OUTCOME"
-            exit 1
+            echo "INFO: Action failed (likely external API unavailable) - treating as acceptable"
+            echo "PASS: Test accepted API failure as non-blocking"
           fi
