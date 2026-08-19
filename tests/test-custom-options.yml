@@ -1,4 +1,4 @@
-name: Test custom options (dark theme, image mode, lifetime range)
+name: Test custom options - dark theme, image mode, lifetime range
 on:
   workflow_dispatch:
 jobs:
@@ -9,55 +9,51 @@ jobs:
 
       - name: Create test README with markers
         run: |
-          cat > "$GITHUB_WORKSPACE/test-readme-custom.md" << 'EOF'
-          # Test README
-
-          <!-- STATSFM START -->
-          <!-- STATSFM END -->
-          EOF
-          echo "Created README:"
-          cat "$GITHUB_WORKSPACE/test-readme-custom.md"
+          mkdir -p "$GITHUB_WORKSPACE/tests"
+          printf '# My Music Stats\n\n<!-- STATSFM START -->\n<!-- STATSFM END -->\n' \
+            > "$GITHUB_WORKSPACE/tests/test-readme-custom.md"
+          echo "=== Created README ==="
+          cat "$GITHUB_WORKSPACE/tests/test-readme-custom.md"
 
       - id: action
         uses: .
-        with:
-          statsfm_username: teraha
-          readme_path: /github/workspace/test-readme-custom.md
-          display_limit: '3'
-          items_per_row: '3'
-          show_duration: 'true'
-          show_rank: 'false'
-          time_range: lifetime
-          theme: dark
-          display_mode: image
         continue-on-error: true
+        with:
+          statsfm_username: "teraha"
+          display_limit: "2"
+          items_per_row: "2"
+          show_duration: "false"
+          show_rank: "false"
+          time_range: "lifetime"
+          readme_path: "tests/test-readme-custom.md"
+          theme: "dark"
+          display_mode: "image"
 
-      - name: Assert action ran correctly with custom options
-        env:
-          OUTCOME: ${{ steps.action.outcome }}
+      - name: Assert README markers are intact and content may be present
         run: |
-          echo "action outcome: $OUTCOME"
-          echo "README content after action:"
-          cat "$GITHUB_WORKSPACE/test-readme-custom.md"
-          if [ "$OUTCOME" = "success" ]; then
-            # Action succeeded - verify README was updated between markers
-            content=$(cat "$GITHUB_WORKSPACE/test-readme-custom.md")
-            if ! echo "$content" | grep -q "<!-- STATSFM START -->"; then
-              echo "FAIL: START marker missing"
-              exit 1
-            fi
-            if ! echo "$content" | grep -q "<!-- STATSFM END -->"; then
-              echo "FAIL: END marker missing"
-              exit 1
-            fi
-            echo "PASS: action succeeded with custom options and README markers are intact"
+          README="$GITHUB_WORKSPACE/tests/test-readme-custom.md"
+          echo "=== README content ==="
+          cat "$README"
+          echo "=== End README ==="
+
+          # Check that the markers still exist
+          if ! grep -q "<!-- STATSFM START -->" "$README"; then
+            echo "FAIL: START marker missing from README"
+            exit 1
+          fi
+          if ! grep -q "<!-- STATSFM END -->" "$README"; then
+            echo "FAIL: END marker missing from README"
+            exit 1
+          fi
+
+          echo "PASS: README markers are intact"
+
+          # Check if content was inserted between markers
+          BETWEEN=$(awk '/<!-- STATSFM START -->/,/<!-- STATSFM END -->/' "$README")
+          echo "Content between markers: $BETWEEN"
+
+          if echo "$BETWEEN" | grep -q '<img\|<a href\|No recent albums\|No displayable'; then
+            echo "PASS: README was updated with album content or no-data message"
           else
-            # Action failed - this is acceptable if API is unavailable in CI
-            echo "INFO: action outcome was '$OUTCOME' (API may be unavailable in CI)"
-            # Verify README file still exists
-            if [ ! -f "$GITHUB_WORKSPACE/test-readme-custom.md" ]; then
-              echo "FAIL: README file was deleted by the action"
-              exit 1
-            fi
-            echo "PASS: action ran with custom options (API may be unavailable), README file intact"
+            echo "INFO: No album content found - API may be unavailable (acceptable)"
           fi

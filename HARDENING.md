@@ -8,7 +8,27 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
-Action **teraha-dev--statsfm-to-markdown/v1.1.3** was hardened automatically. 0 finding(s) were identified and resolved across 0 iteration(s).
+Action **teraha-dev--statsfm-to-markdown/v1.1.3** was hardened automatically. 1 finding(s) were identified and resolved across 1 iteration(s).
+
+## Findings Fixed
+
+### unpinned-uses (severity: high)
+
+The workflow file uses `actions/checkout@v4`, which is pinned to a mutable version tag rather than an immutable 40-character commit SHA. This means the action could be silently updated (or compromised) without the workflow noticing, enabling supply-chain attacks. It should be pinned to a full SHA, e.g. `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4`.
+
+Locations:
+
+- `.github/workflows/statsfm.yml:16`
+
+## Iteration Notes
+
+### Iteration 1
+
+**Fixes applied:** unpinned-uses
+
+**Notes:**
+
+Pinned `actions/checkout@v4` to its full commit SHA `actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4` in `.github/workflows/statsfm.yml` line 16. No other findings were present.
 
